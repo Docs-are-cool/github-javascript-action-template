@@ -3,7 +3,7 @@
 # `index.js` is the code that will run.
 # For our project, we generate this file through a build process from other source files.
 # We need to make sure the checked-in `index.js` actually matches what we expect it to be.
-name: Check dist/
+name: Update dist/
 
 on:
   push:
@@ -11,15 +11,15 @@ on:
       - main
     paths-ignore:
       - '**.md'
-  pull_request:
-    paths-ignore:
-      - '**.md'
   workflow_dispatch:
+
+concurrency: 
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   check-dist:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v3
 
@@ -37,15 +37,14 @@ jobs:
       - name: Compare the expected and actual dist/ directories
         run: |
           if [ "$(git diff --ignore-space-at-eol dist/ | wc -l)" -gt "0" ]; then
-            echo "Detected uncommitted changes after build.  See status below:"
+            echo "result=diff" >> $GITHUB_ENV
+            echo "::notice titl=Differences detected::Differences detected in commited distribution files and expected from npm run prepare"
             git diff
-            exit 1
           fi
         id: diff
 
-      # If index.js was different than expected, upload the expected version as an artifact
-      - uses: actions/upload-artifact@v3
-        if: ${{ failure() && steps.diff.conclusion == 'failure' }}
+      - name: "Commit distribution files"
+        uses: stefanzweifel/git-auto-commit-action@v4
+        if: ${{ env.result  == 'diff' }}
         with:
-          name: dist
-          path: dist/
+          commit_message: Updated distribution files
